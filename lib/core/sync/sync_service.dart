@@ -19,6 +19,8 @@ import '../../domain/repositories/task_repository.dart';
 /// ============================================================
 
 import '../network/api_service.dart';
+import 'sync_models.dart';
+export 'sync_models.dart';
 
 class SyncService {
   /// The repository abstraction used for all database operations.
@@ -90,13 +92,13 @@ class SyncService {
         // Tally results from this batch
         for (final result in results) {
           switch (result) {
-            case _TaskResult.success:
+            case TaskSyncResult.success:
               successCount++;
               break;
-            case _TaskResult.retryable:
+            case TaskSyncResult.retryable:
               failureCount++;
               break;
-            case _TaskResult.permanentlyFailed:
+            case TaskSyncResult.permanentlyFailed:
               permanentlyFailedCount++;
               break;
           }
@@ -157,7 +159,7 @@ class SyncService {
   /// 2. Attempt the mock API upload
   /// 3. On success → mark synced, log success
   /// 4. On failure → apply retry logic or permanently fail
-  Future<_TaskResult> _processTask(SyncQueueEntity queueItem) async {
+  Future<TaskSyncResult> _processTask(SyncQueueEntity queueItem) async {
     final taskId = queueItem.taskId;
     debugPrint('[SyncEngine] ──────────────────────────────────');
     debugPrint('[SyncEngine] 🔄 Processing task: $taskId');
@@ -201,7 +203,7 @@ class SyncService {
 
   /// Called when the API upload succeeds.
   /// Updates both the task and queue status, and logs the success.
-  Future<_TaskResult> _handleSuccess(SyncQueueEntity queueItem) async {
+  Future<TaskSyncResult> _handleSuccess(SyncQueueEntity queueItem) async {
     final taskId = queueItem.taskId;
 
     // ── Update task status to synced ──
@@ -218,7 +220,7 @@ class SyncService {
     );
 
     debugPrint('[SyncEngine]    🎉 Task $taskId → SYNCED (attempt ${queueItem.retryCount + 1})');
-    return _TaskResult.success;
+    return TaskSyncResult.success;
   }
 
   // =====================================================================
@@ -231,7 +233,7 @@ class SyncService {
   ///   - If retryCount <= [maxRetries]: increment retry, keep status queued
   ///     so the next sync cycle picks it up again.
   ///   - If retryCount > [maxRetries]: mark as permanently failed.
-  Future<_TaskResult> _handleFailure(
+  Future<TaskSyncResult> _handleFailure(
     SyncQueueEntity queueItem,
     String errorMessage,
   ) async {
@@ -257,7 +259,7 @@ class SyncService {
       );
 
       debugPrint('[SyncEngine]    🔁 Task $taskId → RETRY ($newRetryCount/$maxRetries) — next backoff: ${_calculateBackoff(newRetryCount)}s');
-      return _TaskResult.retryable;
+      return TaskSyncResult.retryable;
     } else {
       // ── Max retries exhausted → permanently fail ──
       await _repository.updateTaskStatus(taskId, TaskStatus.failed);
@@ -271,7 +273,7 @@ class SyncService {
       );
 
       debugPrint('[SyncEngine]    ⛔ Task $taskId → PERMANENTLY FAILED after $maxRetries retries');
-      return _TaskResult.permanentlyFailed;
+      return TaskSyncResult.permanentlyFailed;
     }
   }
 
@@ -290,57 +292,4 @@ class SyncService {
   }
 }
 
-// =====================================================================
-// SUPPORTING TYPES
-// =====================================================================
-
-/// Internal enum to classify the outcome of a single task sync attempt.
-enum _TaskResult { success, retryable, permanentlyFailed }
-
-/// Public result class returned by [SyncService.syncTasks] to summarize
-/// what happened during a complete sync cycle.
-class SyncResult {
-  /// Total number of queued tasks that were processed.
-  final int totalProcessed;
-
-  /// How many tasks synced successfully.
-  final int successCount;
-
-  /// How many tasks failed but are eligible for retry.
-  final int failureCount;
-
-  /// How many tasks exhausted all retries and were permanently failed.
-  final int permanentlyFailedCount;
-
-  /// Whether the sync was skipped because another cycle was already running.
-  final bool skippedBecauseBusy;
-
-  /// Any unexpected error message from the sync cycle itself.
-  final String? error;
-
-  SyncResult({
-    required this.totalProcessed,
-    required this.successCount,
-    required this.failureCount,
-    required this.permanentlyFailedCount,
-    this.skippedBecauseBusy = false,
-    this.error,
-  });
-
-  /// True if every processed task synced successfully.
-  bool get isFullSuccess =>
-      totalProcessed > 0 &&
-      successCount == totalProcessed &&
-      error == null;
-
-  /// True if at least one task failed (retryable or permanent).
-  bool get hasFailures => failureCount > 0 || permanentlyFailedCount > 0;
-
-  @override
-  String toString() {
-    if (skippedBecauseBusy) return 'SyncResult: Skipped (already syncing)';
-    if (error != null) return 'SyncResult: Error — $error';
-    return 'SyncResult: $successCount/$totalProcessed synced, '
-        '$failureCount retryable, $permanentlyFailedCount permanently failed';
-  }
-}
+// Types are defined in sync_models.dart (re-exported from this file).

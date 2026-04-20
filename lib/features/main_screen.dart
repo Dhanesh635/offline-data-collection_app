@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../core/providers/providers.dart';
@@ -8,6 +7,7 @@ import '../domain/repositories/task_repository.dart';
 import 'dashboard/dashboard_screen.dart';
 import 'tasks/task_list_screen.dart';
 import 'sync/sync_screen.dart';
+import 'widgets/sync_status_banner.dart';
 
 class MainScreen extends ConsumerStatefulWidget {
   const MainScreen({super.key});
@@ -33,7 +33,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _buildSyncStatusBanner(ref),
+            const SyncStatusBanner(),
             Expanded(
               child: _screens[_currentIndex],
             ),
@@ -69,53 +69,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     );
   }
 
-  Widget _buildSyncStatusBanner(WidgetRef ref) {
-    return StreamBuilder<List<ConnectivityResult>>(
-      stream: Connectivity().onConnectivityChanged,
-      builder: (context, snapshot) {
-        final isOffline = snapshot.data?.every((r) => r == ConnectivityResult.none) ?? false;
-        final lastSyncAsync = ref.watch(lastSyncTimeProvider);
-
-        return Container(
-          color: isOffline ? Theme.of(context).colorScheme.errorContainer : Theme.of(context).colorScheme.primaryContainer,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: [
-              Icon(
-                isOffline ? Icons.wifi_off : Icons.cloud_sync,
-                size: 16,
-                color: isOffline 
-                    ? Theme.of(context).colorScheme.onErrorContainer 
-                    : Theme.of(context).colorScheme.onPrimaryContainer,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  isOffline ? 'Offline Mode' : 'Online • Ready to Sync',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: isOffline 
-                        ? Theme.of(context).colorScheme.onErrorContainer 
-                        : Theme.of(context).colorScheme.onPrimaryContainer,
-                  ),
-                ),
-              ),
-              lastSyncAsync.when(
-                data: (time) => Text(
-                  time == null ? 'Never synced' : 'Last sync: ${time.hour}:${time.minute.toString().padLeft(2, '0')}',
-                  style: TextStyle(fontSize: 12, color: isOffline ? Theme.of(context).colorScheme.onErrorContainer : Theme.of(context).colorScheme.onPrimaryContainer),
-                ),
-                loading: () => const SizedBox.shrink(),
-                error: (error, stackTrace) => const SizedBox.shrink(),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  // A speed dial / pop-up menu for the floating action button to replicate TestScreen debug capabilities
+  // FAB menu for adding new tasks (camera capture or text task)
   Widget _buildFabMenu(BuildContext context, WidgetRef ref) {
     return FloatingActionButton(
       onPressed: () {
@@ -127,7 +81,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('Debug Actions', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const Text('Add New Task', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 16),
                   ListTile(
                     leading: const Icon(Icons.camera_alt),
@@ -139,7 +93,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                   ),
                   ListTile(
                     leading: const Icon(Icons.add),
-                    title: const Text('Add Dummy Task'),
+                    title: const Text('Add Text Task'),
                     onTap: () {
                       Navigator.pop(context);
                       _addDummyTask(context, ref);
@@ -177,7 +131,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
       }
       return;
     }
-    
+
     ref.invalidate(allTasksProvider);
     ref.invalidate(queuedTasksProvider);
   }
